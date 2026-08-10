@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+u8darts[torch]
+torch
+joblib
+holidays
+st-gsheets-connection
