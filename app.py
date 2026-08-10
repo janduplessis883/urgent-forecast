@@ -68,6 +68,13 @@ def get_google_sheet_connection() -> GSheetsConnection:
     return st.connection("gsheets", type=GSheetsConnection)
 
 
+def refresh_google_sheet_connection() -> None:
+    try:
+        get_google_sheet_connection().reset()
+    except Exception:
+        st.cache_data.clear()
+
+
 def get_service_account_credentials() -> dict[str, Any]:
     config = st.secrets.get("connections", {}).get("gsheets", {})
     excluded_keys = {
@@ -694,10 +701,18 @@ with tab_upload:
 
 with tab_history:
     st.subheader("Recent actuals")
-    st.line_chart(ts.set_index("ds")["y"])
-    st.dataframe(ts.tail(30), width="stretch", hide_index=True)
+    recent_actuals = ts[ts["ds"] >= pd.Timestamp("2026-01-01")].copy()
+    st.line_chart(recent_actuals.set_index("ds")["y"])
+    st.dataframe(recent_actuals, width="stretch", hide_index=True)
 
-    st.subheader("Forecast log")
+    forecast_header, refresh_col = st.columns([1, 0.25], vertical_alignment="center")
+    with forecast_header:
+        st.subheader("Forecast log")
+    with refresh_col:
+        if st.button("Refresh", key="refresh_forecast_log"):
+            refresh_google_sheet_connection()
+            st.rerun()
+
     st.dataframe(
         forecast_log.sort_values(["forecast_date", "horizon"], ascending=[False, True]),
         width="stretch",
