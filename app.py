@@ -133,7 +133,7 @@ def _column_index_to_letter(index: int) -> str:
     return letters
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=True)
 def load_model_assets() -> tuple[Any, Any]:
     if DARTS_IMPORT_ERROR is not None:
         raise ImportError(
@@ -561,7 +561,7 @@ def metric_card(label: str, value: str) -> None:
     st.metric(label, value)
 
 
-st.title("Urgent Appointments Forecast")
+st.title(":material/e911_emergency: Urgent Appointments Forecast")
 
 missing_files = require_files()
 if missing_files:
