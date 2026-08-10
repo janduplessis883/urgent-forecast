@@ -525,6 +525,38 @@ def sync_all_to_google_sheet(
     return forecast_ok and ts_ok, f"{forecast_message} {ts_message}"
 
 
+def calculate_forecast_metrics(forecast_log: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    scored = forecast_log.copy()
+    scored["actual"] = pd.to_numeric(scored["actual"], errors="coerce")
+    scored["predicted"] = pd.to_numeric(scored["predicted"], errors="coerce")
+    scored = scored.dropna(subset=["actual", "predicted"]).copy()
+
+    if scored.empty:
+        return scored, pd.DataFrame()
+
+    scored["error"] = scored["actual"] - scored["predicted"]
+    scored["abs_error"] = scored["error"].abs()
+    scored["squared_error"] = scored["error"] ** 2
+    scored["pct_error"] = np.where(
+        scored["actual"] != 0,
+        scored["abs_error"] / scored["actual"].abs(),
+        np.nan,
+    )
+
+    by_horizon = (
+        scored.groupby("horizon", dropna=False)
+        .agg(
+            rows=("actual", "size"),
+            mae=("abs_error", "mean"),
+            rmse=("squared_error", lambda values: float(np.sqrt(values.mean()))),
+            mape=("pct_error", lambda values: float(values.mean() * 100)),
+            bias=("error", "mean"),
+        )
+        .reset_index()
+    )
+    return scored, by_horizon
+
+
 def metric_card(label: str, value: str) -> None:
     st.metric(label, value)
 
@@ -566,8 +598,8 @@ with top_cols[2]:
 with top_cols[3]:
     metric_card("Forecast log rows", f"{len(forecast_log):,}")
 
-tab_single, tab_upload, tab_history = st.tabs(
-    ["Run prediction", "Upload actuals", "History"]
+tab_single, tab_upload, tab_history, tab_metrics = st.tabs(
+    ["Run prediction", "Upload actuals", "History", "Metrics"]
 )
 
 with tab_single:
@@ -718,3 +750,70 @@ with tab_history:
         width="stretch",
         hide_index=True,
     )
+
+with tab_metrics:
+    st.subheader("Forecast Accuracy")
+    scored_log, metrics_by_horizon = calculate_forecast_metrics(forecast_log)
+
+    if scored_log.empty:
+        st.info("No completed forecast rows yet. Metrics need rows with both `predicted` and `actual` values.")
+    else:
+        overall_mae = scored_log["abs_error"].mean()
+        overall_rmse = float(np.sqrt(scored_log["squared_error"].mean()))
+        overall_mape = scored_log["pct_error"].mean() * 100
+        overall_bias = scored_log["error"].mean()
+
+        metric_cols = st.columns(5)
+        with metric_cols[0]:
+            st.metric("Scored rows", f"{len(scored_log):,}")
+        with metric_cols[1]:
+            st.metric("MAE", f"{overall_mae:.1f}")
+        with metric_cols[2]:
+            st.metric("RMSE", f"{overall_rmse:.1f}")
+        with metric_cols[3]:
+            st.metric("MAPE", "N/A" if pd.isna(overall_mape) else f"{overall_mape:.1f}%")
+        with metric_cols[4]:
+            st.metric("Bias", f"{overall_bias:.1f}")
+
+        st.subheader("By Horizon")
+        st.dataframe(
+            metrics_by_horizon.round(
+                {"mae": 1, "rmse": 1, "mape": 1, "bias": 1}
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+
+        st.subheader("Scored Forecast Rows")
+        display_scored = scored_log[
+            [
+                "forecast_date",
+                "target_date",
+                "horizon",
+                "predicted",
+                "actual",
+                "error",
+                "abs_error",
+                "pct_error",
+            ]
+        ].copy()
+        display_scored["forecast_date"] = pd.to_datetime(
+            display_scored["forecast_date"]
+        ).dt.strftime("%Y-%m-%d")
+        display_scored["target_date"] = pd.to_datetime(
+            display_scored["target_date"]
+        ).dt.strftime("%Y-%m-%d")
+        display_scored["pct_error"] = display_scored["pct_error"] * 100
+        st.dataframe(
+            display_scored.sort_values(["target_date", "horizon"], ascending=[False, True]).round(
+                {
+                    "predicted": 1,
+                    "actual": 1,
+                    "error": 1,
+                    "abs_error": 1,
+                    "pct_error": 1,
+                }
+            ),
+            width="stretch",
+            hide_index=True,
+        )
