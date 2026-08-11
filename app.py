@@ -573,18 +573,19 @@ forecast_log = read_forecast_log()
 last_actual_date = ts["ds"].max()
 
 with st.sidebar:
-    st.header("Data")
+    st.header(":material/database: Data")
     st.caption(f"Time series source: Google Sheet `{google_ts_worksheet_name()}`")
     st.caption(f"Forecast log source: Google Sheet `{google_worksheet_name()}`")
     st.divider()
-    st.header("Google Sheet")
+    st.header(":material/apk_document: Google Sheet")
     st.link_button("Open target sheet", GOOGLE_SHEET_URL)
     st.caption(f"Forecast worksheet: `{google_worksheet_name()}`")
     st.caption(f"Actuals worksheet: `{google_ts_worksheet_name()}`")
     st.caption(f"Calendar worksheet: `{google_calendar_worksheet_name()}`")
+    st.divider()
     can_sync_google_sheet = has_google_sheet_write_auth()
     if can_sync_google_sheet:
-        st.success("Streamlit GSheets service account configured")
+        st.success(":material/done_outline: GSheets connection **Live**")
     else:
         st.info("Public sheet links are read-only. Add service account fields to `[connections.gsheets]` to save.")
 
@@ -603,7 +604,7 @@ tab_single, tab_upload, tab_history, tab_metrics = st.tabs(
 )
 
 with tab_single:
-    st.subheader("Add one day and forecast the next 5 working days")
+    st.subheader(":shimmer[Add one day and forecast the next 5 working days]")
     with st.form("single_day_form"):
         col_a, col_b = st.columns([1, 1])
         with col_a:
@@ -733,7 +734,7 @@ with tab_upload:
 
 with tab_history:
     st.subheader("Recent actuals")
-    recent_actuals = ts[ts["ds"] >= pd.Timestamp("2026-01-01")].copy()
+    recent_actuals = ts.copy()
     st.line_chart(recent_actuals.set_index("ds")["y"])
     st.dataframe(recent_actuals, width="stretch", hide_index=True)
 
@@ -752,7 +753,7 @@ with tab_history:
     )
 
 with tab_metrics:
-    st.subheader("Forecast Accuracy")
+    st.subheader("Model Training Accuracy Metrics")
     st.image('metric1.png')
     with st.expander("SMAPE v MDAPE"):
         st.markdown("""### 1. What is SMAPE?
@@ -870,6 +871,8 @@ At **Day 3**, the error is more "balanced." The errors are spread more evenly, w
 """)
 
     st.image('metric2.png')
+    st.divider()
+    st.subheader("Forecasting Accuracy Metrics")
     scored_log, metrics_by_horizon = calculate_forecast_metrics(forecast_log)
 
     if scored_log.empty:
