@@ -561,7 +561,7 @@ def metric_card(label: str, value: str) -> None:
     st.metric(label, value)
 
 
-st.title(":material/e911_emergency: Urgent Appointments Forecast")
+st.title(":material/zone_person_urgent: Urgent Appointments Forecast - SMW")
 
 missing_files = require_files()
 if missing_files:
@@ -585,7 +585,7 @@ with st.sidebar:
     st.divider()
     can_sync_google_sheet = has_google_sheet_write_auth()
     if can_sync_google_sheet:
-        st.success(":material/done_outline: GSheets connection **Live**")
+        st.success(":material/cloud_done: GSheets connection **Live**")
     else:
         st.info("Public sheet links are read-only. Add service account fields to `[connections.gsheets]` to save.")
 
@@ -605,6 +605,7 @@ tab_single, tab_upload, tab_history, tab_metrics = st.tabs(
 
 with tab_single:
     st.subheader(":shimmer[Add one day and forecast the next 5 working days]")
+    st.caption("Update `ts.csv` with weekend data as 0 directly in the Gsheet skipping prediction.")
     with st.form("single_day_form"):
         col_a, col_b = st.columns([1, 1])
         with col_a:
@@ -742,7 +743,7 @@ with tab_history:
     with forecast_header:
         st.subheader("Forecast log")
     with refresh_col:
-        if st.button("Refresh", key="refresh_forecast_log"):
+        if st.button("Refresh", key="refresh_forecast_log", icon=":material/refresh:"):
             refresh_google_sheet_connection()
             st.rerun()
 
@@ -753,7 +754,98 @@ with tab_history:
     )
 
 with tab_metrics:
+    st.subheader("Forecasting Accuracy Metrics")
+    scored_log, metrics_by_horizon = calculate_forecast_metrics(forecast_log)
+
+    if scored_log.empty:
+        st.info("No completed forecast rows yet. Metrics need rows with both `predicted` and `actual` values.")
+    else:
+        overall_mae = scored_log["abs_error"].mean()
+        overall_rmse = float(np.sqrt(scored_log["squared_error"].mean()))
+        overall_mape = scored_log["pct_error"].mean() * 100
+        overall_bias = scored_log["error"].mean()
+
+        metric_cols = st.columns(5)
+        with metric_cols[0]:
+            st.metric("Scored rows", f"{len(scored_log):,}", icon=":material/settings:")
+        with metric_cols[1]:
+            st.metric("MAE", f"{overall_mae:.1f}")
+        with metric_cols[2]:
+            st.metric("RMSE", f"{overall_rmse:.1f}")
+        with metric_cols[3]:
+            st.metric("MAPE", "N/A" if pd.isna(overall_mape) else f"{overall_mape:.1f}%")
+        with metric_cols[4]:
+            st.metric("Bias", f"{overall_bias:.1f}")
+
+        st.subheader("By Horizon")
+        st.dataframe(
+            metrics_by_horizon.round(
+                {"mae": 1, "rmse": 1, "mape": 1, "bias": 1}
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+
+        st.subheader("Scored Forecast Rows")
+        display_scored = scored_log[
+            [
+                "forecast_date",
+                "target_date",
+                "horizon",
+                "predicted",
+                "actual",
+                "error",
+                "abs_error",
+                "pct_error",
+            ]
+        ].copy()
+        display_scored["forecast_date"] = pd.to_datetime(
+            display_scored["forecast_date"]
+        ).dt.strftime("%Y-%m-%d")
+        display_scored["target_date"] = pd.to_datetime(
+            display_scored["target_date"]
+        ).dt.strftime("%Y-%m-%d")
+        display_scored["pct_error"] = display_scored["pct_error"] * 100
+        st.dataframe(
+            display_scored.sort_values(["target_date", "horizon"], ascending=[False, True]).round(
+                {
+                    "predicted": 1,
+                    "actual": 1,
+                    "error": 1,
+                    "abs_error": 1,
+                    "pct_error": 1,
+                }
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+    st.divider()
+
     st.subheader("Model Training Accuracy Metrics")
+    st.code("""# NBeats Model Training Architecture
+model_nbeats = NBEATSModel(
+    input_chunk_length=30,
+    output_chunk_length=5,
+
+    generic_architecture=True,
+
+    num_stacks=10,
+    num_blocks=1,
+    num_layers=4,
+    layer_widths=256,
+
+    n_epochs=85,
+    batch_size=32,
+
+    random_state=42,
+    force_reset=True,
+
+    pl_trainer_kwargs={
+        "accelerator": "mps",
+        "devices": 1
+    }
+)""")
+
     st.image('metric1.png')
     with st.expander("SMAPE v MDAPE"):
         st.markdown("""### 1. What is SMAPE?
@@ -871,69 +963,3 @@ At **Day 3**, the error is more "balanced." The errors are spread more evenly, w
 """)
 
     st.image('metric2.png')
-    st.divider()
-    st.subheader("Forecasting Accuracy Metrics")
-    scored_log, metrics_by_horizon = calculate_forecast_metrics(forecast_log)
-
-    if scored_log.empty:
-        st.info("No completed forecast rows yet. Metrics need rows with both `predicted` and `actual` values.")
-    else:
-        overall_mae = scored_log["abs_error"].mean()
-        overall_rmse = float(np.sqrt(scored_log["squared_error"].mean()))
-        overall_mape = scored_log["pct_error"].mean() * 100
-        overall_bias = scored_log["error"].mean()
-
-        metric_cols = st.columns(5)
-        with metric_cols[0]:
-            st.metric("Scored rows", f"{len(scored_log):,}")
-        with metric_cols[1]:
-            st.metric("MAE", f"{overall_mae:.1f}")
-        with metric_cols[2]:
-            st.metric("RMSE", f"{overall_rmse:.1f}")
-        with metric_cols[3]:
-            st.metric("MAPE", "N/A" if pd.isna(overall_mape) else f"{overall_mape:.1f}%")
-        with metric_cols[4]:
-            st.metric("Bias", f"{overall_bias:.1f}")
-
-        st.subheader("By Horizon")
-        st.dataframe(
-            metrics_by_horizon.round(
-                {"mae": 1, "rmse": 1, "mape": 1, "bias": 1}
-            ),
-            width="stretch",
-            hide_index=True,
-        )
-
-        st.subheader("Scored Forecast Rows")
-        display_scored = scored_log[
-            [
-                "forecast_date",
-                "target_date",
-                "horizon",
-                "predicted",
-                "actual",
-                "error",
-                "abs_error",
-                "pct_error",
-            ]
-        ].copy()
-        display_scored["forecast_date"] = pd.to_datetime(
-            display_scored["forecast_date"]
-        ).dt.strftime("%Y-%m-%d")
-        display_scored["target_date"] = pd.to_datetime(
-            display_scored["target_date"]
-        ).dt.strftime("%Y-%m-%d")
-        display_scored["pct_error"] = display_scored["pct_error"] * 100
-        st.dataframe(
-            display_scored.sort_values(["target_date", "horizon"], ascending=[False, True]).round(
-                {
-                    "predicted": 1,
-                    "actual": 1,
-                    "error": 1,
-                    "abs_error": 1,
-                    "pct_error": 1,
-                }
-            ),
-            width="stretch",
-            hide_index=True,
-        )
