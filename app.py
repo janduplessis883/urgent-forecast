@@ -753,6 +753,123 @@ with tab_history:
 
 with tab_metrics:
     st.subheader("Forecast Accuracy")
+    st.image('metric1.png')
+    with st.expander("SMAPE v MDAPE"):
+        st.markdown("""### 1. What is SMAPE?
+SMAPE stands for **Symmetric Mean Absolute Percentage Error**. It is a metric used to measure the accuracy of a forecast.
+
+Why "Percentage Error"? Most error metrics (like MAE or RMSE) are expressed in the same units as the data (e.g., dollars, liters, or people). A percentage error is useful because it tells you the error relative to the size of the numbers. An error of 10 units is huge if you are predicting 100, but tiny if you are predicting 1,000,000.
+Why "Symmetric"? Standard MAPE (Mean Absolute Percentage Error) has a flaw: it treats "under-forecasting" and "over-forecasting" differently. If the actual value is 0, MAPE becomes undefined. SMAPE was designed to fix this by putting both the actual value and the forecasted value in the denominator, creating a "symmetric" calculation.
+The Scale: SMAPE results are typically expressed as a decimal between 0 and 2 (or 0% and 200%). In your plot, the values are very small (e.g., 0.025), which means the error is extremely low (2.5%), indicating a very accurate model.
+2. How to Interpret the Axes
+To read this plot, you must look at the relationship between the two axes:
+
+X-Axis: Forecast Horizon (working days)
+This represents how far into the future the model is looking.
+
+Day 1: The model is predicting what will happen tomorrow.
+Day 5: The model is predicting what will happen five days from now.
+General Rule: Usually, as the horizon increases, error goes up because the future is harder to predict.
+Y-Axis: SMAPE (Error Rate)
+This represents the "penalty" or the amount of error.
+
+Lower is better. A value of 0.025 means a 2.5% error.
+3. Interpreting This Specific Plot
+When you look at this specific line, you are seeing the trade-off between time and accuracy.
+
+The Descent (Days 1 to 3): Interestingly, your error decreases as you move from Day 1 to Day 3. This suggests that the model is actually more accurate at a 3-day horizon than it is for a 1-day horizon. This can happen if the model is capturing a weekly trend or if the 1-day volatility is higher than the 3-day average.
+The "Sweet Spot" (Day 3): The lowest point on the graph is at Day 3 (SMAPE
+≈
+≈ 0.024). This is the model's peak performance. At this specific horizon, the model's predictions are most reliable.
+The Ascent (Days 3 to 5): After Day 3, the error begins to climb. This is the "natural" behavior of forecasting. As the model tries to look further into the future (Day 4 and Day 5), uncertainty grows, and the error increases.
+4. Summary Checklist for Interpretation
+When you see this type of plot in the future, ask these three questions:
+
+Where is the minimum? That is your most accurate forecast horizon.
+How steep is the curve? A very steep rise after the minimum suggests that the model's accuracy degrades rapidly as you look further ahead.
+Is the error magnitude acceptable? In your plot, the error is very low (maxing out around 5.4%). This would be considered an excellent model in almost any industry.
+In short: Your plot shows that your model is most effective at a 3-day forecast horizon, with error rates remaining very low (between 2.4% and 5.4%) across all tested days.
+
+### 1. What is MDAPE?
+MDAPE stands for **Median Absolute Percentage Error**.
+
+The "Median" Difference: Unlike SMAPE (which is an average), MDAPE uses the median. This makes it much more robust to outliers.
+Why use it? If your data has a few extreme "wild" days where the error was massive, an average (SMAPE) would be pulled upward by those outliers. The median (MDAPE) ignores those extreme swings and tells you where the "typical" or "middle" error lies for the majority of your data points.
+The Scale: Like SMAPE, it is a percentage-based error.
+2. Comparing the Two Plots (The "Conflict")
+You might notice that the shapes of the two plots are different. This is the most important part of your analysis.
+
+Feature	SMAPE Plot (The "Average" View)	MDAPE Plot (The "Typical" View)
+Lowest Point	Day 3 (Error
+≈
+≈ 0.024)	Day 2 (Error
+≈
+≈ 0.015)
+The Story	Tells you the average error magnitude across all predictions.	Tells you where the middle of your error distribution sits.
+Interpretation	Suggests the model is best at a 3-day horizon.	Suggests the model is most "typical" or consistent at a 2-day horizon.
+3. Why are they different?
+The difference in the "best day" (Day 3 vs. Day 2) reveals something critical about your model's error distribution:
+
+The Day 2 "Dip" in MDAPE: The fact that MDAPE is much lower at Day 2 suggests that for the majority of your data, the model is incredibly accurate at the 2-day horizon.
+The Day 3 "Dip" in SMAPE: The reason the SMAPE (average) doesn't drop as low at Day 2 as the MDAPE does is likely because there are outliers at Day 2.
+Example: On Day 2, you might have 90% of your predictions being perfect (low error), but 10% being huge errors. The MDAPE would ignore those huge errors and show a low value. However, the SMAPE (the average) would be pulled up by those huge errors.
+4. Final Conclusion for your Report
+If you are presenting this, here is how you should interpret the relationship:
+
+"The model shows a discrepancy between average error (SMAPE) and typical error (MDAPE). While the average error is lowest at a 3-day horizon, the median error is lowest at a 2-day horizon. This indicates that while the model is highly accurate for the majority of cases at Day 2, there are occasional large errors (outliers) at that horizon that pull the average error up. The 3-day horizon provides a more stable average performance."
+
+Which one should you trust?
+
+If your business goal is to minimize the total sum of errors, look at SMAPE.
+If your business goal is to ensure the most common/typical forecast is accurate, look at MDAPE.""")
+
+
+    with st.expander("Comparative Analysis of Forecast Model Performance"):
+        st.markdown("""# Comparative Analysis of Forecast Model Performance
+
+This analysis compares two different error metrics—**SMAPE** (Symmetric Mean Absolute Percentage Error) and **MDAPE** (Median Absolute Percentage Error)—to evaluate a forecasting model across different horizons (1 to 5 working days).
+
+### 1. Metric Definitions
+*   **SMAPE (The "Average" View):** Measures the average percentage error. It is sensitive to all data points, meaning large errors (outliers) will significantly pull this value up.
+*   **MDAPE (The "Typical" View):** Measures the median percentage error. It is robust to outliers, showing the error level for the "middle" of your data.
+
+---
+
+### 2. Data Summary Table
+
+| Forecast Horizon | SMAPE (Average Error) | MDAPE (Typical Error) |
+| :--- | :--- | :--- |
+| **Day 1** | ~0.054 | ~0.025 |
+| **Day 2** | ~0.042 | **~0.015 (Minimum)** |
+| **Day 3** | **~0.024 (Minimum)** | ~0.023 |
+| **Day 4** | ~0.027 | ~0.022 |
+| **Day 5** | ~0.047 | ~0.020 |
+
+---
+
+### 3. Key Findings & Interpretation
+
+#### The "Optimal" Horizon Discrepancy
+There is a notable difference in where the "best" performance occurs depending on which metric you use:
+*   **SMAPE suggests Day 3 is best:** The average error is minimized at the 3-day horizon.
+*   **MDAPE suggests Day 2 is best:** The typical error is minimized at the 2-day horizon.
+
+#### Why are they different?
+The discrepancy reveals the presence of **outliers at the 2-day horizon**.
+At **Day 2**, the MDAPE is extremely low (~0.015), meaning that for the vast majority of your data, the model is incredibly accurate. However, the SMAPE is much higher (~0.042) because there are likely a few significant "misses" (outliers) at Day 2 that are pulling the average up.
+
+At **Day 3**, the error is more "balanced." The errors are spread more evenly, which is why the average (SMAPE) reaches its lowest point there.
+
+### 4. Final Conclusion for Decision Making
+
+*   **If you want to minimize total aggregate error:** The model is most effective at a **3-day horizon**. This is your "safest" bet for overall stability.
+*   **If you want to know how the model performs for a typical case:** The model is most accurate at a **2-day horizon**, but you must be aware that it is prone to occasional large errors at this specific timeframe.
+
+**Summary Statement:**
+*"The model demonstrates high accuracy across all horizons (all errors < 6%). The discrepancy between the 2-day MDAPE minimum and the 3-day SMAPE minimum indicates that while the model is highly precise for most cases at 2 days, it is susceptible to intermittent outliers at that horizon. For stable, generalized performance, the 3-day horizon is the optimal target."*
+""")
+
+    st.image('metric2.png')
     scored_log, metrics_by_horizon = calculate_forecast_metrics(forecast_log)
 
     if scored_log.empty:
