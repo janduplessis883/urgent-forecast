@@ -938,7 +938,7 @@ with tab_metrics:
         horizon_trend.columns = [f"H{int(column)}" for column in horizon_trend.columns]
         st.line_chart(horizon_trend, height=300)
 
-        st.divider()
+
         with st.expander("Scored Forecast Metrics - Dataframes"):
             st.subheader("By Horizon")
             st.dataframe(
@@ -977,7 +977,7 @@ with tab_metrics:
                 width="stretch",
                 hide_index=True,
             )
-    st.divider()
+
 
     with st.expander("Model Training Architecture"):
         st.subheader("Model Training Accuracy Metrics")
