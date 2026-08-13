@@ -939,43 +939,44 @@ with tab_metrics:
         st.line_chart(horizon_trend, height=300)
 
         st.divider()
-        st.subheader("By Horizon")
-        st.dataframe(
-            metrics_by_horizon.round(
-                {"mae": 1, "rmse": 1, "mape": 1, "bias": 1}
-            ),
-            width="stretch",
-            hide_index=True,
-        )
+        with st.expander("Scored Forecast Metrics - Dataframes"):
+            st.subheader("By Horizon")
+            st.dataframe(
+                metrics_by_horizon.round(
+                    {"mae": 1, "rmse": 1, "mape": 1, "bias": 1}
+                ),
+                width="stretch",
+                hide_index=True,
+            )
 
-        st.subheader("Scored Forecast Rows")
-        display_scored = scored_log[
-            [
-                "forecast_date",
-                "target_date",
-                "horizon",
-                "predicted",
-                "actual",
-                "error",
-                "abs_error",
-                "pct_error",
-            ]
-        ].copy()
-        display_scored["pct_error"] = display_scored["pct_error"] * 100
-        st.dataframe(
-            display_scored.sort_values(["target_date", "horizon"], ascending=[False, True]).round(
-                {
-                    "predicted": 1,
-                    "actual": 1,
-                    "error": 1,
-                    "abs_error": 1,
-                    "pct_error": 1,
-                }
-            ),
-            column_config=date_only_column_config(display_scored),
-            width="stretch",
-            hide_index=True,
-        )
+            st.subheader("Scored Forecast Rows")
+            display_scored = scored_log[
+                [
+                    "forecast_date",
+                    "target_date",
+                    "horizon",
+                    "predicted",
+                    "actual",
+                    "error",
+                    "abs_error",
+                    "pct_error",
+                ]
+            ].copy()
+            display_scored["pct_error"] = display_scored["pct_error"] * 100
+            st.dataframe(
+                display_scored.sort_values(["target_date", "horizon"], ascending=[False, True]).round(
+                    {
+                        "predicted": 1,
+                        "actual": 1,
+                        "error": 1,
+                        "abs_error": 1,
+                        "pct_error": 1,
+                    }
+                ),
+                column_config=date_only_column_config(display_scored),
+                width="stretch",
+                hide_index=True,
+            )
     st.divider()
 
     with st.expander("Model Training Architecture"):
