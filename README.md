@@ -2,6 +2,8 @@
 
 Streamlit app for rerunning the saved N-BEATS urgent appointments model.
 
+![Urgent Forecast TS](gh1.png)
+
 ## Files
 
 Keep these model artifacts in `files/`:
