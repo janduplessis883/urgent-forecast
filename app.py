@@ -72,7 +72,8 @@ def refresh_google_sheet_connection() -> None:
     try:
         get_google_sheet_connection().reset()
     except Exception:
-        st.cache_data.clear()
+        pass
+    st.cache_data.clear()
 
 
 def get_service_account_credentials() -> dict[str, Any]:
@@ -557,6 +558,54 @@ def calculate_forecast_metrics(forecast_log: pd.DataFrame) -> tuple[pd.DataFrame
     return scored, by_horizon
 
 
+def calculate_daily_forecast_metrics(scored_log: pd.DataFrame) -> pd.DataFrame:
+    daily_metrics = (
+        scored_log.groupby("target_date", dropna=False)
+        .agg(
+            rows=("actual", "size"),
+            mae=("abs_error", "mean"),
+            rmse=("squared_error", lambda values: float(np.sqrt(values.mean()))),
+            mape=("pct_error", lambda values: float(values.mean() * 100)),
+            bias=("error", "mean"),
+        )
+        .reset_index()
+    )
+    daily_metrics["target_date"] = pd.to_datetime(daily_metrics["target_date"])
+    return daily_metrics.sort_values("target_date")
+
+
+def calculate_daily_metrics_by_horizon(scored_log: pd.DataFrame) -> pd.DataFrame:
+    daily_by_horizon = (
+        scored_log.groupby(["target_date", "horizon"], dropna=False)
+        .agg(
+            rows=("actual", "size"),
+            rmse=("squared_error", lambda values: float(np.sqrt(values.mean()))),
+            mape=("pct_error", lambda values: float(values.mean() * 100)),
+            bias=("error", "mean"),
+        )
+        .reset_index()
+    )
+    daily_by_horizon["target_date"] = pd.to_datetime(daily_by_horizon["target_date"])
+    return daily_by_horizon.sort_values(["target_date", "horizon"])
+
+
+def highlight_next_day_forecasts(row: pd.Series) -> list[str]:
+    next_day = pd.Timestamp.today().normalize() + pd.Timedelta(days=1)
+    target_date = pd.to_datetime(row.get("target_date"), errors="coerce")
+    if pd.notna(target_date) and target_date.normalize() == next_day:
+        return ["background-color: #FF9900; color: #111827"] * len(row)
+    return [""] * len(row)
+
+
+def date_only_column_config(data: pd.DataFrame) -> dict[str, Any]:
+    date_columns = ["ds", "forecast_date", "target_date"]
+    return {
+        column: st.column_config.DatetimeColumn(column, format="YYYY-MM-DD")
+        for column in date_columns
+        if column in data.columns
+    }
+
+
 def metric_card(label: str, value: str) -> None:
     st.metric(label, value)
 
@@ -568,17 +617,26 @@ if missing_files:
     st.error("Missing required files: " + ", ".join(missing_files))
     st.stop()
 
-ts = read_ts()
-forecast_log = read_forecast_log()
-last_actual_date = ts["ds"].max()
-
 with st.sidebar:
     st.header(":material/database: Data")
     st.caption(f"Time series source: Google Sheet `{google_ts_worksheet_name()}`")
     st.caption(f"Forecast log source: Google Sheet `{google_worksheet_name()}`")
+    if st.button(
+        "Reload app data",
+        icon=":material/refresh:",
+        width="stretch",
+        key="reload_app_data",
+    ):
+        refresh_google_sheet_connection()
+        st.rerun()
     st.divider()
     st.header(":material/apk_document: Google Sheet")
-    st.link_button("Open target sheet", GOOGLE_SHEET_URL)
+    st.link_button(
+        "Open target sheet",
+        GOOGLE_SHEET_URL,
+        icon=":material/open_in_new:",
+        width="stretch",
+    )
     st.caption(f"Forecast worksheet: `{google_worksheet_name()}`")
     st.caption(f"Actuals worksheet: `{google_ts_worksheet_name()}`")
     st.caption(f"Calendar worksheet: `{google_calendar_worksheet_name()}`")
@@ -588,6 +646,10 @@ with st.sidebar:
         st.success(":material/cloud_done: GSheets connection **Live**")
     else:
         st.info("Public sheet links are read-only. Add service account fields to `[connections.gsheets]` to save.")
+
+ts = read_ts()
+forecast_log = read_forecast_log()
+last_actual_date = ts["ds"].max()
 
 top_cols = st.columns(4)
 with top_cols[0]:
@@ -663,7 +725,8 @@ with tab_single:
 
         st.success("Appended a new 5 working-day forecast.")
         st.dataframe(
-            forecast.assign(target_date=forecast["target_date"].dt.strftime("%Y-%m-%d")),
+            forecast,
+            column_config=date_only_column_config(forecast),
             width="stretch",
             hide_index=True,
         )
@@ -726,7 +789,8 @@ with tab_upload:
 
             st.success(f"Processed {len(uploaded_rows)} actual row(s) and appended a forecast.")
             st.dataframe(
-                forecast.assign(target_date=forecast["target_date"].dt.strftime("%Y-%m-%d")),
+                forecast,
+                column_config=date_only_column_config(forecast),
                 width="stretch",
                 hide_index=True,
             )
@@ -737,7 +801,14 @@ with tab_history:
     st.subheader("Recent actuals")
     recent_actuals = ts.copy()
     st.line_chart(recent_actuals.set_index("ds")["y"])
-    st.dataframe(recent_actuals, width="stretch", hide_index=True)
+    st.subheader("ts")
+    recent_actuals_display = recent_actuals.tail(20)
+    st.dataframe(
+        recent_actuals_display,
+        column_config=date_only_column_config(recent_actuals_display),
+        width="stretch",
+        hide_index=True,
+    )
 
     forecast_header, refresh_col = st.columns([1, 0.25], vertical_alignment="center")
     with forecast_header:
@@ -747,8 +818,13 @@ with tab_history:
             refresh_google_sheet_connection()
             st.rerun()
 
+    forecast_log_display = forecast_log.sort_values(
+        ["forecast_date", "horizon"],
+        ascending=[False, True],
+    )
     st.dataframe(
-        forecast_log.sort_values(["forecast_date", "horizon"], ascending=[False, True]),
+        forecast_log_display.style.apply(highlight_next_day_forecasts, axis=1),
+        column_config=date_only_column_config(forecast_log_display),
         width="stretch",
         hide_index=True,
     )
@@ -767,15 +843,88 @@ with tab_metrics:
 
         metric_cols = st.columns(5)
         with metric_cols[0]:
-            st.metric("Scored rows", f"{len(scored_log):,}", icon=":material/settings:")
+            st.metric("Scored rows", f"{len(scored_log):,}", icon=":material/show_chart:")
         with metric_cols[1]:
-            st.metric("MAE", f"{overall_mae:.1f}")
+            st.metric("MAE", f"{overall_mae:.1f}", icon=":material/show_chart:")
         with metric_cols[2]:
-            st.metric("RMSE", f"{overall_rmse:.1f}")
+            st.metric("RMSE", f"{overall_rmse:.1f}", icon=":material/show_chart:")
         with metric_cols[3]:
-            st.metric("MAPE", "N/A" if pd.isna(overall_mape) else f"{overall_mape:.1f}%")
+            st.metric("MAPE", "N/A" if pd.isna(overall_mape) else f"{overall_mape:.1f}%", icon=":material/show_chart:")
         with metric_cols[4]:
-            st.metric("Bias", f"{overall_bias:.1f}")
+            st.metric("Bias", f"{overall_bias:.1f}", icon=":material/show_chart:")
+
+        daily_metrics = calculate_daily_forecast_metrics(scored_log)
+        daily_metrics_by_horizon = calculate_daily_metrics_by_horizon(scored_log)
+        metric_colors = {
+            "RMSE": "#252f3d",
+            "Bias": "#306f83",
+            "MAE": "#FFD814",
+        }
+
+        st.subheader("Performance Trend")
+        trend_metric = st.segmented_control(
+            "Metric",
+            ["MAPE", "RMSE", "MAE", "Bias"],
+            default="MAPE",
+            key="performance_trend_metric",
+        )
+        trend_column = trend_metric.lower()
+        trend_display = daily_metrics.set_index("target_date")[[trend_column]]
+        st.line_chart(
+            trend_display,
+            color=metric_colors.get(trend_metric),
+            height=280,
+        )
+
+        st.subheader("Horizon Diagnostics")
+        horizon_cols = st.columns(3)
+        with horizon_cols[0]:
+            st.caption("MAPE by horizon")
+            st.bar_chart(
+                metrics_by_horizon.set_index("horizon")["mape"],
+                height=260,
+            )
+        with horizon_cols[1]:
+            st.caption("RMSE by horizon")
+            st.bar_chart(
+                metrics_by_horizon.set_index("horizon")["rmse"],
+                color="#252f3d",
+                height=260,
+            )
+        with horizon_cols[2]:
+            st.caption("Bias by horizon")
+            st.bar_chart(
+                metrics_by_horizon.set_index("horizon")["bias"],
+                color="#306f83",
+                height=260,
+            )
+
+        st.subheader("Trend by Horizon")
+        horizon_trend_metric = st.segmented_control(
+            "Trend metric",
+            ["MAPE", "RMSE", "Bias"],
+            default="MAPE",
+            key="horizon_trend_metric",
+        )
+        horizon_trend_column = horizon_trend_metric.lower()
+        horizon_trend = daily_metrics_by_horizon.pivot_table(
+            index="target_date",
+            columns="horizon",
+            values=horizon_trend_column,
+            aggfunc="mean",
+        ).sort_index()
+        horizon_trend.columns = [f"H{int(column)}" for column in horizon_trend.columns]
+        st.line_chart(horizon_trend, height=300)
+
+        with st.expander("The meaning of Bias"):
+            st.markdown(
+                """### What is Bias?
+Bias is a metric that indicates whether a forecasting model tends to over-predict or under-predict. It is calculated as the average of the errors (actual - predicted). A positive bias means the model is under-predicting (actual values are higher than predicted), while a negative bias means the model is over-predicting (actual values are lower than predicted). A bias close to zero indicates that the model is well-calibrated and does not consistently over- or under-predict.
+- **Positive Bias**: The model is underestimating the actual values. This could lead to missed opportunities or insufficient resource allocation.
+- **Negative Bias**: The model is overestimating the actual values. This could lead to over-preparation or wasted resources.
+- **Zero Bias**: The model is balanced and does not favor over- or under-prediction.
+Understanding bias is crucial for decision-making, as it helps identify systematic errors in the forecasting model and informs adjustments to improve accuracy and reliability."""
+            )
 
         st.subheader("By Horizon")
         st.dataframe(
@@ -799,12 +948,6 @@ with tab_metrics:
                 "pct_error",
             ]
         ].copy()
-        display_scored["forecast_date"] = pd.to_datetime(
-            display_scored["forecast_date"]
-        ).dt.strftime("%Y-%m-%d")
-        display_scored["target_date"] = pd.to_datetime(
-            display_scored["target_date"]
-        ).dt.strftime("%Y-%m-%d")
         display_scored["pct_error"] = display_scored["pct_error"] * 100
         st.dataframe(
             display_scored.sort_values(["target_date", "horizon"], ascending=[False, True]).round(
@@ -816,6 +959,7 @@ with tab_metrics:
                     "pct_error": 1,
                 }
             ),
+            column_config=date_only_column_config(display_scored),
             width="stretch",
             hide_index=True,
         )
