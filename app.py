@@ -938,15 +938,6 @@ with tab_metrics:
         horizon_trend.columns = [f"H{int(column)}" for column in horizon_trend.columns]
         st.line_chart(horizon_trend, height=300)
 
-        with st.expander("The meaning of Bias"):
-            st.markdown(
-                """### What is Bias?
-Bias is a metric that indicates whether a forecasting model tends to over-predict or under-predict. It is calculated as the average of the errors (actual - predicted). A positive bias means the model is under-predicting (actual values are higher than predicted), while a negative bias means the model is over-predicting (actual values are lower than predicted). A bias close to zero indicates that the model is well-calibrated and does not consistently over- or under-predict.
-- **Positive Bias**: The model is underestimating the actual values. This could lead to missed opportunities or insufficient resource allocation.
-- **Negative Bias**: The model is overestimating the actual values. This could lead to over-preparation or wasted resources.
-- **Zero Bias**: The model is balanced and does not favor over- or under-prediction.
-Understanding bias is crucial for decision-making, as it helps identify systematic errors in the forecasting model and informs adjustments to improve accuracy and reliability."""
-            )
 
         st.subheader("By Horizon")
         st.dataframe(
