@@ -938,7 +938,7 @@ with tab_metrics:
         horizon_trend.columns = [f"H{int(column)}" for column in horizon_trend.columns]
         st.line_chart(horizon_trend, height=300)
 
-
+        st.divider()
         st.subheader("By Horizon")
         st.dataframe(
             metrics_by_horizon.round(
