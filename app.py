@@ -34,6 +34,7 @@ MODEL_CHECKPOINT_FILE = FILES_DIR / "nbeats_model.pt.ckpt"
 SCALER_FILE = FILES_DIR / "nbeats_scaler.pkl"
 CALENDAR_FILE = FILES_DIR / "nbeats_calendar.pkl"
 FORECAST_HORIZON = 5
+GOOGLE_SHEET_READ_TTL_SECONDS = 60
 PL_TRAINER_KWARGS = {
     "accelerator": "cpu",
     "devices": 1,
@@ -155,7 +156,7 @@ def read_ts() -> pd.DataFrame:
     ts = conn.read(
         spreadsheet=GOOGLE_SHEET_URL,
         worksheet=google_ts_worksheet_name(),
-        ttl=0,
+        ttl=GOOGLE_SHEET_READ_TTL_SECONDS,
     )
     ts.columns = [str(column).strip() for column in ts.columns]
     if not {"ds", "y"}.issubset(ts.columns):
@@ -172,7 +173,7 @@ def read_forecast_log() -> pd.DataFrame:
     log = conn.read(
         spreadsheet=GOOGLE_SHEET_URL,
         worksheet=google_worksheet_name(),
-        ttl=0,
+        ttl=GOOGLE_SHEET_READ_TTL_SECONDS,
     )
     log.columns = [str(column).strip() for column in log.columns]
     required_columns = ["forecast_date", "target_date", "horizon", "predicted", "actual"]
@@ -202,7 +203,7 @@ def read_calendar() -> pd.DataFrame:
     calendar = conn.read(
         spreadsheet=GOOGLE_SHEET_URL,
         worksheet=google_calendar_worksheet_name(),
-        ttl=0,
+        ttl=GOOGLE_SHEET_READ_TTL_SECONDS,
     )
     calendar.columns = [str(column).strip() for column in calendar.columns]
     if not {"ds", "holiday"}.issubset(calendar.columns):
@@ -221,18 +222,21 @@ def save_ts(ts: pd.DataFrame) -> None:
     ok, message = sync_ts_to_google_sheet(ts)
     if not ok:
         raise RuntimeError(message)
+    refresh_google_sheet_connection()
 
 
 def save_forecast_log(log: pd.DataFrame) -> None:
     ok, message = sync_forecast_log_to_google_sheet(log)
     if not ok:
         raise RuntimeError(message)
+    refresh_google_sheet_connection()
 
 
 def save_calendar(calendar: pd.DataFrame) -> None:
     ok, message = sync_calendar_to_google_sheet(calendar)
     if not ok:
         raise RuntimeError(message)
+    refresh_google_sheet_connection()
 
 
 def excluded_dates(calendar: pd.DataFrame) -> set[pd.Timestamp]:
@@ -593,7 +597,7 @@ def highlight_next_day_forecasts(row: pd.Series) -> list[str]:
     next_day = pd.Timestamp.today().normalize() + pd.Timedelta(days=1)
     target_date = pd.to_datetime(row.get("target_date"), errors="coerce")
     if pd.notna(target_date) and target_date.normalize() == next_day:
-        return ["background-color: #FF9900; color: #111827"] * len(row)
+        return ["background-color: #FFE8B3; color: #111827"] * len(row)
     return [""] * len(row)
 
 
@@ -714,6 +718,7 @@ with tab_single:
             try:
                 ok, message = sync_all_to_google_sheet(updated_ts, updated_log)
                 if ok:
+                    refresh_google_sheet_connection()
                     st.success(f"Saved to Google Sheets. {message}")
                 else:
                     st.info(message)
@@ -781,6 +786,7 @@ with tab_upload:
             if sync_uploaded_sheet:
                 ok, message = sync_all_to_google_sheet(updated_ts, updated_log)
                 if ok:
+                    refresh_google_sheet_connection()
                     st.success(f"Saved to Google Sheets. {message}")
                 else:
                     st.info(message)
@@ -800,7 +806,17 @@ with tab_upload:
 with tab_history:
     st.subheader("Recent actuals")
     recent_actuals = ts.copy()
-    st.line_chart(recent_actuals.set_index("ds")["y"])
+    show_recent_actuals_window = st.toggle(
+        "Show actuals from 2026-04-01",
+        value=False,
+        key="show_recent_actuals_window",
+    )
+    actuals_chart = recent_actuals
+    if show_recent_actuals_window:
+        actuals_chart = actuals_chart[
+            actuals_chart["ds"] >= pd.Timestamp("2026-04-01")
+        ]
+    st.line_chart(actuals_chart.set_index("ds")["y"])
     st.subheader("ts")
     recent_actuals_display = recent_actuals.tail(20)
     st.dataframe(

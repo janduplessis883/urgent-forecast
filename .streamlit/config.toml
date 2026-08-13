@@ -29,7 +29,7 @@ baseFontSize = 17
 baseFontWeight = 400
 codeFontSize = "13px"
 codeFontWeight = 400
-headingFontSizes = ["28px", "24px", "20px", "16px", "14px", "12px"]
+headingFontSizes = ["30px", "24px", "20px", "16px", "14px", "12px"]
 headingFontWeights = [700, 700, 600, 600, 500, 500]
 linkUnderline = false
 
@@ -82,7 +82,7 @@ dataframeHeaderBackgroundColor = "#F7F8F8"
 backgroundColor = "#232F3E"          # Amazon dark navy
 secondaryBackgroundColor = "#37475A" # Lighter navy for hover/active
 codeBackgroundColor = "#37475A"
-codeTextColor = "#F7F8F8"
+codeTextColor = "#FFAF1A"
 textColor = "#FFFFFF"                # White text on dark
 borderColor = "#37475A"
 primaryColor = "#FF9900"             # Orange accents in sidebar
